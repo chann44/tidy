@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -11,16 +12,26 @@ import (
 	"strings"
 )
 
+var embeddedDepsJSON []byte
+
 var ignoreDirs = map[string]bool{
 	"node_modules": true,
 	"public":       true,
 	".git":         true,
 	".next":        true,
+	"dist":         true,
+	"build":        true,
+	"out":          true,
 }
 
 type PackageJSON struct {
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
+}
+
+type DepsConfig struct {
+	Prod []string `json:"prod"`
+	Dev  []string `json:"dev"`
 }
 
 func main() {
@@ -40,9 +51,16 @@ func main() {
 			return filepath.SkipDir
 		}
 
-		ext := filepath.Ext(d.Name())
-		if !d.IsDir() && (ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx") {
-			tsFiles = append(tsFiles, path)
+		if !d.IsDir() {
+			ext := filepath.Ext(d.Name())
+			name := d.Name()
+			isStandardFile := ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx"
+			isConfigFile := strings.Contains(name, ".config.") &&
+				(ext == ".js" || ext == ".ts" || ext == ".mjs" || ext == ".cjs")
+
+			if isStandardFile || isConfigFile {
+				tsFiles = append(tsFiles, path)
+			}
 		}
 
 		return nil
@@ -76,35 +94,95 @@ func main() {
 		}
 	}
 
-	var missingPackages []string
+	depsConfig, err := loadDepsConfig(root)
+	if err != nil {
+		fmt.Printf("Warning: Could not read deps.json: %v\n", err)
+		depsConfig = &DepsConfig{
+			Prod: []string{},
+			Dev:  []string{},
+		}
+	}
+
+	prodDeps := make(map[string]bool)
+	devDeps := make(map[string]bool)
+	for _, pkg := range depsConfig.Prod {
+		prodDeps[pkg] = true
+	}
+	for _, pkg := range depsConfig.Dev {
+		devDeps[pkg] = true
+	}
+
+	var missingProdPackages []string
+	var missingDevPackages []string
 	for pkg := range externalPackages {
 		_, inDeps := packageJSON.Dependencies[pkg]
 		_, inDevDeps := packageJSON.DevDependencies[pkg]
 		if !inDeps && !inDevDeps {
-			missingPackages = append(missingPackages, pkg)
+			if devDeps[pkg] {
+				missingDevPackages = append(missingDevPackages, pkg)
+			} else {
+				missingProdPackages = append(missingProdPackages, pkg)
+			}
 		}
 	}
 
-	if len(missingPackages) == 0 {
+	totalMissing := len(missingProdPackages) + len(missingDevPackages)
+	if totalMissing == 0 {
 		fmt.Println("All packages are already installed!")
 		return
 	}
 
 	fmt.Println("Missing packages found:")
-	for _, pkg := range missingPackages {
-		fmt.Printf("  - %s\n", pkg)
+	if len(missingProdPackages) > 0 {
+		fmt.Println("\nProduction dependencies:")
+		for _, pkg := range missingProdPackages {
+			fmt.Printf("  - %s\n", pkg)
+		}
 	}
-	fmt.Printf("\nInstalling packages...\n")
-
-	cmd := exec.Command("bun", append([]string{"add"}, missingPackages...)...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("Error installing packages: %v\n", err)
-		os.Exit(1)
+	if len(missingDevPackages) > 0 {
+		fmt.Println("\nDev dependencies:")
+		for _, pkg := range missingDevPackages {
+			fmt.Printf("  - %s\n", pkg)
+		}
 	}
 
-	fmt.Println("\nPackages installed successfully!")
+	if len(missingProdPackages) > 0 {
+		fmt.Printf("\nInstalling production packages...\n")
+		cmd := exec.Command("bun", append([]string{"add"}, missingProdPackages...)...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error installing production packages: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if len(missingDevPackages) > 0 {
+		fmt.Printf("\nInstalling dev packages...\n")
+		cmd := exec.Command("bun", append([]string{"add", "-d"}, missingDevPackages...)...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Error installing dev packages: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	fmt.Println("\nAll packages installed successfully!")
+}
+
+func loadDepsConfig(root string) (*DepsConfig, error) {
+	fmt.Printf("Loading embedded deps.json (size: %d bytes)...\n", len(embeddedDepsJSON))
+
+	var config DepsConfig
+	if err := json.Unmarshal(embeddedDepsJSON, &config); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Loaded %d production packages and %d dev packages from embedded config\n",
+		len(config.Prod), len(config.Dev))
+
+	return &config, nil
 }
 
 func readPackageJSON(path string) (*PackageJSON, error) {
