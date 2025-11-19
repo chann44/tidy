@@ -15,6 +15,7 @@ var ignoreDirs = map[string]bool{
 	"node_modules": true,
 	"public":       true,
 	".git":         true,
+	".next":        true,
 }
 
 type PackageJSON struct {
