@@ -43,8 +43,8 @@ func main() {
 		panic(err)
 	}
 
-	pathsChan := make(chan string)
-	packagesChan := make(chan string)
+	pathsChan := make(chan string, 10)
+	packagesChan := make(chan string, 100)
 	wg := &sync.WaitGroup{}
 
 	go func() {
