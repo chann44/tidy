@@ -9,9 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 )
 
+//go:embed deps.json
 var embeddedDepsJSON []byte
 
 var ignoreDirs = map[string]bool{
@@ -34,40 +37,60 @@ type DepsConfig struct {
 	Dev  []string `json:"dev"`
 }
 
-func Nmain() {
+func main() {
 	root, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
 
-	var tsFiles []string
+	pathsChan := make(chan string)
+	packagesChan := make(chan string)
+	wg := &sync.WaitGroup{}
 
-	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		if d.IsDir() && ignoreDirs[d.Name()] {
-			return filepath.SkipDir
-		}
-
-		if !d.IsDir() {
-			ext := filepath.Ext(d.Name())
-			name := d.Name()
-			isStandardFile := ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx"
-			isConfigFile := strings.Contains(name, ".config.") &&
-				(ext == ".js" || ext == ".ts" || ext == ".mjs" || ext == ".cjs")
-
-			if isStandardFile || isConfigFile {
-				tsFiles = append(tsFiles, path)
+	go func() {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
 			}
+
+			if d.IsDir() && ignoreDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+
+			if !d.IsDir() {
+				ext := filepath.Ext(d.Name())
+				name := d.Name()
+				isStandardFile := ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx"
+				isConfigFile := strings.Contains(name, ".config.") &&
+					(ext == ".js" || ext == ".ts" || ext == ".mjs" || ext == ".cjs")
+
+				if isStandardFile || isConfigFile {
+					pathsChan <- path
+				}
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			fmt.Printf("Error walking directory: %v\n", err)
 		}
+		close(pathsChan)
+	}()
 
-		return nil
-	})
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go worker(pathsChan, packagesChan, wg)
+	}
 
-	if err != nil {
-		panic(err)
+	go func() {
+		wg.Wait()
+		close(packagesChan)
+	}()
+
+	externalPackages := make(map[string]bool)
+	for pkg := range packagesChan {
+		externalPackages[pkg] = true
 	}
 
 	packageJSONPath := filepath.Join(root, "package.json")
@@ -77,20 +100,6 @@ func Nmain() {
 		packageJSON = &PackageJSON{
 			Dependencies:    make(map[string]string),
 			DevDependencies: make(map[string]string),
-		}
-	}
-
-	externalPackages := make(map[string]bool)
-
-	for _, filePath := range tsFiles {
-		packages, err := extractExternalPackages(filePath)
-		if err != nil {
-			fmt.Printf("Warning: Could not read %s: %v\n", filePath, err)
-			continue
-		}
-
-		for _, pkg := range packages {
-			externalPackages[pkg] = true
 		}
 	}
 
@@ -171,6 +180,52 @@ func Nmain() {
 	fmt.Println("\nAll packages installed successfully!")
 }
 
+func worker(paths <-chan string, packages chan<- string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for filePath := range paths {
+		pkgs := extractPackagesFromFile(filePath)
+		for _, pkg := range pkgs {
+			packages <- pkg
+		}
+	}
+}
+
+func extractPackagesFromFile(filePath string) []string {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil
+	}
+
+	content := string(data)
+	var packages []string
+	seen := make(map[string]bool)
+
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`import\s+.*\s+from\s+["']([^"']+)["']`),
+		regexp.MustCompile(`import\s+["']([^"']+)["']`),
+		regexp.MustCompile(`require\(["']([^"']+)["']\)`),
+		regexp.MustCompile(`import\(["']([^"']+)["']\)`),
+	}
+
+	for _, pattern := range patterns {
+		matches := pattern.FindAllStringSubmatch(content, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				pkg := match[1]
+				if !strings.HasPrefix(pkg, ".") && !strings.HasPrefix(pkg, "/") && !strings.HasPrefix(pkg, "@/") && !strings.HasPrefix(pkg, "node:") {
+					packageName := extractPackageName(pkg)
+					if packageName != "" && !seen[packageName] {
+						packages = append(packages, packageName)
+						seen[packageName] = true
+					}
+				}
+			}
+		}
+	}
+
+	return packages
+}
+
 func loadDepsConfig(root string) (*DepsConfig, error) {
 	fmt.Printf("Loading embedded deps.json (size: %d bytes)...\n", len(embeddedDepsJSON))
 
@@ -204,43 +259,6 @@ func readPackageJSON(path string) (*PackageJSON, error) {
 	}
 
 	return &pkg, nil
-}
-
-func extractExternalPackages(filePath string) ([]string, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	content := string(data)
-	var packages []string
-	seen := make(map[string]bool)
-
-	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`import\s+.*\s+from\s+["']([^"']+)["']`),
-		regexp.MustCompile(`import\s+["']([^"']+)["']`),
-		regexp.MustCompile(`require\(["']([^"']+)["']\)`),
-		regexp.MustCompile(`import\(["']([^"']+)["']\)`),
-	}
-
-	for _, pattern := range patterns {
-		matches := pattern.FindAllStringSubmatch(content, -1)
-		for _, match := range matches {
-			if len(match) > 1 {
-				pkg := match[1]
-				// Skip relative imports (./ or ../), path aliases (@/), and Node.js built-ins (node:)
-				if !strings.HasPrefix(pkg, ".") && !strings.HasPrefix(pkg, "/") && !strings.HasPrefix(pkg, "@/") && !strings.HasPrefix(pkg, "node:") {
-					packageName := extractPackageName(pkg)
-					if packageName != "" && !seen[packageName] {
-						packages = append(packages, packageName)
-						seen[packageName] = true
-					}
-				}
-			}
-		}
-	}
-
-	return packages, nil
 }
 
 func extractPackageName(importPath string) string {
