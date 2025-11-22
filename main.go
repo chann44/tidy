@@ -284,7 +284,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -298,7 +297,30 @@ func main() {
 		panic(err)
 	}
 	jsn, err := internal.ReadJson(wd)
-	b, _ := json.MarshalIndent(jsn, "", "  ")
-	fmt.Println(string(b))
+	if err != nil {
+		panic(err)
+	}
+	resolved, err := internal.Resolve(jsn)
+	if err != nil {
+		panic(err)
+	}
 
+	for name, deps := range resolved {
+		fmt.Printf("%s@%s\n", name, deps.Version)
+		fmt.Printf("  tarball: %s\n", deps.Tarball)
+		if len(deps.Dependencies) > 0 {
+			fmt.Printf("  dependencies:\n")
+			for depName, depDeps := range deps.Dependencies {
+				fmt.Printf("    %s@%s\n", depName, depDeps.Version)
+			}
+		}
+		fmt.Println()
+	}
+
+	for name, deps := range resolved {
+		err := internal.Install(name, deps.Tarball)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
