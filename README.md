@@ -63,6 +63,17 @@ cd tidy
 go build -o tidy
 ```
 
+### Using Install Script
+
+You can also use the provided installation script:
+
+```bash
+git clone https://github.com/chann44/tidy.git
+cd tidy
+chmod +x install.sh
+./install.sh
+```
+
 ## Usage
 
 Navigate to your project directory and run:
