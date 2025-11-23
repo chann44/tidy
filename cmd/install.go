@@ -166,15 +166,23 @@ func installPackages(resolved map[string]internal.Deps) {
 			}
 		}(name, deps)
 	}
-	wg.Wait()
-	fmt.Println()
-	if len(errors) > 0 {
-		fmt.Printf("⚠️  Completed with %d error(s):\n", len(errors))
-		for _, err := range errors {
-			fmt.Printf("  - %s\n", err)
+		wg.Wait()
+		fmt.Println()
+		
+		if !IsQuiet() {
+			fmt.Println("🔗 Linking binaries...")
 		}
-		os.Exit(1)
-	} else {
-		fmt.Println("✅ All packages installed successfully!")
-	}
+		if err := internal.LinkBinaries(); err != nil {
+			fmt.Printf("⚠️  Warning: Failed to link binaries: %v\n", err)
+		}
+		
+		if len(errors) > 0 {
+			fmt.Printf("⚠️  Completed with %d error(s):\n", len(errors))
+			for _, err := range errors {
+				fmt.Printf("  - %s\n", err)
+			}
+			os.Exit(1)
+		} else {
+			fmt.Println("✅ All packages installed successfully!")
+		}
 }

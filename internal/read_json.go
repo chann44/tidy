@@ -11,6 +11,7 @@ type PackageJson struct {
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
 	Scripts         map[string]string `json:"scripts"`
+	Bin             interface{}       `json:"bin"`
 }
 func ReadJson(wd string) (PackageJson, error) {
 	path := filepath.Join(wd, "package.json")

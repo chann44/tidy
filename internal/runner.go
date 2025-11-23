@@ -51,6 +51,15 @@ func (sr *ScriptRunner) listScripts() string {
 	return sb.String()
 }
 func (sr *ScriptRunner) executeScript(script string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(filepath.Join(cwd, "node_modules")); err == nil {
+		_ = LinkBinaries() // Silently fail if linking fails, PATH will still work if binaries exist
+	}
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd", "/C", script)
@@ -61,12 +70,6 @@ func (sr *ScriptRunner) executeScript(script string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-
-	// Add node_modules/.bin to PATH
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
 
 	binPath := filepath.Join(cwd, "node_modules", ".bin")
 	pathEnv := os.Getenv("PATH")

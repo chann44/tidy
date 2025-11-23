@@ -144,10 +144,10 @@ func linkPackage(src, dst string) error {
 		if err == nil {
 			return nil
 		}
-		return copyFile(path, targetPath)
+		return CopyFile(path, targetPath)
 	})
 }
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
