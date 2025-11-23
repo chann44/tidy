@@ -19,13 +19,11 @@ func IsInstalled(name string) bool {
 
 	packageDir := filepath.Join(cwd, "node_modules", name)
 
-	// Check if directory exists and is not empty
 	info, err := os.Stat(packageDir)
 	if err != nil || !info.IsDir() {
 		return false
 	}
 
-	// Check if package.json exists in the package directory
 	packageJson := filepath.Join(packageDir, "package.json")
 	_, err = os.Stat(packageJson)
 	return err == nil
