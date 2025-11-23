@@ -6,9 +6,18 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 const REGISTRY_URL = "https://registry.npmjs.org"
+
+var (
+	httpClient     *http.Client
+	httpClientOnce sync.Once
+	manifestCache  = make(map[string]Manifest)
+	cacheMu        sync.RWMutex
+)
 
 type Manifest struct {
 	Name    string `json:"name"`
@@ -51,11 +60,42 @@ func stripVersionPrefix(version string) string {
 	return version
 }
 
+func getHTTPClient() *http.Client {
+	httpClientOnce.Do(func() {
+		httpClient = &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		}
+	})
+	return httpClient
+}
+
 func FetchManifest(pkg, version string) (Manifest, error) {
 	exactVersion := stripVersionPrefix(version)
+	cacheKey := pkg + "@" + exactVersion
+
+	cacheMu.RLock()
+	if cached, ok := manifestCache[cacheKey]; ok {
+		cacheMu.RUnlock()
+		return cached, nil
+	}
+	cacheMu.RUnlock()
+
 	url := REGISTRY_URL + "/" + pkg + "/" + exactVersion
 
-	resp, err := http.Get(url)
+	client := getHTTPClient()
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return Manifest{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "tidy/1.0")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -75,6 +115,10 @@ func FetchManifest(pkg, version string) (Manifest, error) {
 	if err := json.Unmarshal(body, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("failed to unmarshal: %w, response: %s", err, string(body[:min(len(body), 1000)]))
 	}
+
+	cacheMu.Lock()
+	manifestCache[cacheKey] = manifest
+	cacheMu.Unlock()
 
 	return manifest, nil
 }
