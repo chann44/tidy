@@ -23,7 +23,13 @@ A friendly helper that automatically finds and installs missing npm/bun dependen
 
 A Go tool that automatically finds and installs missing npm/bun dependencies by scanning your TypeScript and JavaScript files.
 
-> 📝 **Journey**: I've shared my journey building this tool on [Twitter/X](https://x.com/44_chann/status/1991221756166557724)
+<div style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin: 24px 0; border-radius: 6px;">
+
+## 📝 Journey
+
+I've shared my journey building this tool on [Twitter/X](https://x.com/44_chann/status/1991221756166557724) 🚀
+
+</div>
 
 <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 16px 0; border-radius: 4px;">
 
