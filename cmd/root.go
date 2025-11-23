@@ -15,16 +15,14 @@ var (
 	verbose bool
 	quiet   bool
 )
-
 var rootCmd = &cobra.Command{
-	Use:   "tidy",
-	Short: "🧹 Tidy - A modern package manager for Node.js",
+	Use:   "btidy",
+	Short: "🧹 bTidy - A modern package manager for Node.js",
 	Long: `Tidy is a fast, intelligent package manager that can:
   • Install dependencies from package.json
   • Scan your codebase and auto-detect packages
   • Run scripts from package.json
   • Support multiple package managers (Bun, pnpm, npm)
-  
 When run without arguments, Tidy launches an interactive UI.`,
 	Version: Version,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -42,16 +40,13 @@ func Execute() {
 		os.Exit(1)
 	}
 }
-
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output")
 }
-
 func IsVerbose() bool {
 	return verbose
 }
-
 func IsQuiet() bool {
 	return quiet
 }

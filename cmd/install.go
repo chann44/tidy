@@ -14,22 +14,19 @@ var (
 	usePnpm bool
 	useNpm  bool
 )
-
 var installCmd = &cobra.Command{
 	Use:   "install [packages...]",
 	Short: "Install packages",
 	Long: `Install packages from package.json or install specific packages.
-
 Examples:
-  tidy install              # Install all dependencies from package.json
-  tidy install react        # Install react
-  tidy install --bun        # Install using Bun
-  tidy install --pnpm       # Install using pnpm
-  tidy install --npm        # Install using npm`,
+  btidy install              # Install all dependencies from package.json
+  btidy install react        # Install react
+  btidy install --bun        # Install using Bun
+  btidy install --pnpm       # Install using pnpm
+  btidy install --npm        # Install using npm`,
 	Aliases: []string{"i"},
 	Run: func(cmd *cobra.Command, args []string) {
 		pm := getPackageManager()
-
 		if len(args) > 0 {
 			installSpecificPackages(pm, args)
 		} else {
@@ -44,7 +41,6 @@ func init() {
 	installCmd.Flags().BoolVar(&usePnpm, "pnpm", false, "use pnpm package manager")
 	installCmd.Flags().BoolVar(&useNpm, "npm", false, "use npm package manager")
 }
-
 func getPackageManager() string {
 	if useBun {
 		return "bun"
@@ -57,7 +53,6 @@ func getPackageManager() string {
 	}
 	return "tidy"
 }
-
 func installSpecificPackages(pm string, packages []string) {
 	if pm != "tidy" {
 		installer := internal.GetPackageManager(pm)
@@ -68,15 +63,12 @@ func installSpecificPackages(pm string, packages []string) {
 		fmt.Println("✓ Packages installed successfully!")
 		return
 	}
-
-	fmt.Printf("Installing %d package(s) using Tidy...\n", len(packages))
-
+	fmt.Printf("Installing %d package(s) using bTidy...\n", len(packages))
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting working directory: %v\n", err)
 		os.Exit(1)
 	}
-
 	var jsn internal.PackageJson
 	if _, err := os.Stat("package.json"); os.IsNotExist(err) {
 		jsn = internal.PackageJson{
@@ -86,62 +78,51 @@ func installSpecificPackages(pm string, packages []string) {
 	} else {
 		jsn, _ = internal.ReadJson(wd)
 	}
-
+	if jsn.Dependencies == nil {
+		jsn.Dependencies = make(map[string]string)
+	}
 	for _, pkg := range packages {
 		jsn.Dependencies[pkg] = "latest"
 	}
-
 	resolved, err := internal.Resolve(jsn)
 	if err != nil {
 		fmt.Printf("Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
-
 	installPackages(resolved)
 }
-
 func installAllPackages() {
 	wd, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting working directory: %v\n", err)
 		os.Exit(1)
 	}
-
 	if _, err := os.Stat("package.json"); os.IsNotExist(err) {
 		fmt.Println("No package.json found. Nothing to install.")
 		return
 	}
-
 	jsn, err := internal.ReadJson(wd)
 	if err != nil {
 		fmt.Printf("Error reading package.json: %v\n", err)
 		os.Exit(1)
 	}
-
 	fmt.Println("📦 Installing dependencies from package.json...")
-
 	resolved, err := internal.Resolve(jsn)
 	if err != nil {
 		fmt.Printf("Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
-
 	installPackages(resolved)
 }
-
 func installPackages(resolved map[string]internal.Deps) {
 	fmt.Printf("Installing %d package(s)...\n\n", len(resolved))
-
-	const maxConcurrency = 10
+	const maxConcurrency = 50
 	semaphore := make(chan struct{}, maxConcurrency)
-
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errors []string
-
 	installing := make(map[string]bool)
 	var installingMu sync.Mutex
-
 	for name, deps := range resolved {
 		if internal.IsInstalled(name) {
 			if !IsQuiet() {
@@ -149,7 +130,6 @@ func installPackages(resolved map[string]internal.Deps) {
 			}
 			continue
 		}
-
 		installingMu.Lock()
 		if installing[name] {
 			installingMu.Unlock()
@@ -160,7 +140,6 @@ func installPackages(resolved map[string]internal.Deps) {
 		}
 		installing[name] = true
 		installingMu.Unlock()
-
 		wg.Add(1)
 		go func(name string, deps internal.Deps) {
 			defer wg.Done()
@@ -169,14 +148,11 @@ func installPackages(resolved map[string]internal.Deps) {
 				delete(installing, name)
 				installingMu.Unlock()
 			}()
-
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-
 			if IsVerbose() {
 				fmt.Printf("📥 Installing %s@%s\n", name, deps.Version)
 			}
-
 			err := internal.Install(name, deps.Tarball)
 			if err != nil {
 				mu.Lock()
@@ -185,15 +161,12 @@ func installPackages(resolved map[string]internal.Deps) {
 				fmt.Printf("❌ Error installing %s: %v\n", name, err)
 				return
 			}
-
 			if !IsQuiet() {
 				fmt.Printf("✓ Installed %s@%s\n", name, deps.Version)
 			}
 		}(name, deps)
 	}
-
 	wg.Wait()
-
 	fmt.Println()
 	if len(errors) > 0 {
 		fmt.Printf("⚠️  Completed with %d error(s):\n", len(errors))

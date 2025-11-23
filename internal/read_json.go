@@ -1,12 +1,10 @@
 package internal
-
 import (
 	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 )
-
 type PackageJson struct {
 	Name            string            `json:"name"`
 	Version         string            `json:"version"`
@@ -14,7 +12,6 @@ type PackageJson struct {
 	DevDependencies map[string]string `json:"devDependencies"`
 	Scripts         map[string]string `json:"scripts"`
 }
-
 func ReadJson(wd string) (PackageJson, error) {
 	path := filepath.Join(wd, "package.json")
 	var jsn PackageJson
