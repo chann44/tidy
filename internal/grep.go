@@ -2,7 +2,6 @@ package internal
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -63,7 +62,6 @@ func Grep(packageJSON PackageJson) {
 		})
 
 		if err != nil {
-			fmt.Printf("Error walking directory: %v\n", err)
 		}
 		close(pathsChan)
 	}()
@@ -92,7 +90,6 @@ func Grep(packageJSON PackageJson) {
 
 	depsConfig, err := loadDepsConfig(root)
 	if err != nil {
-		fmt.Printf("Warning: Could not read deps.json: %v\n", err)
 		depsConfig = &DepsConfig{
 			Prod: []string{},
 			Dev:  []string{},
@@ -124,33 +121,25 @@ func Grep(packageJSON PackageJson) {
 
 	totalMissing := len(missingProdPackages) + len(missingDevPackages)
 	if totalMissing == 0 {
-		fmt.Println("All packages are already in package.json!")
 		return
 	}
 
-	fmt.Println("Missing packages found:")
 	if len(missingProdPackages) > 0 {
-		fmt.Println("\nProduction dependencies:")
 		for _, pkg := range missingProdPackages {
-			fmt.Printf("  - %s\n", pkg)
 			packageJSON.Dependencies[pkg] = "*"
 		}
 	}
 	if len(missingDevPackages) > 0 {
-		fmt.Println("\nDev dependencies:")
 		for _, pkg := range missingDevPackages {
-			fmt.Printf("  - %s\n", pkg)
 			packageJSON.DevDependencies[pkg] = "*"
 		}
 	}
 
 	packageJSONPath := filepath.Join(root, "package.json")
 	if err := writePackageJSON(packageJSONPath, packageJSON); err != nil {
-		fmt.Printf("Error writing package.json: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("\nAdded %d packages to package.json\n", totalMissing)
 }
 
 func worker(paths <-chan string, packages chan<- string, wg *sync.WaitGroup) {
@@ -210,9 +199,6 @@ func loadDepsConfig(root string) (*DepsConfig, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("Loaded %d production packages and %d dev packages from deps.json\n",
-		len(config.Prod), len(config.Dev))
 
 	return &config, nil
 }

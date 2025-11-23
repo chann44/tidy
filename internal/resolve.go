@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -93,7 +92,6 @@ func Resolve(pkgs PackageJson) (Resolved, error) {
 			pendingMu.Unlock()
 
 			if err != nil {
-				fmt.Printf("Warning: Failed to fetch %s@%s: %v\n", current.name, current.vesrion, err)
 				continue
 			}
 

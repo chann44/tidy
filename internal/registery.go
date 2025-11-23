@@ -34,15 +34,28 @@ type Manifest struct {
 func stripVersionPrefix(version string) string {
 	version = strings.TrimSpace(version)
 
-	if version == "*" || version == "x" || version == "X" {
+	if version == "" || version == "*" || version == "x" || version == "X" || version == "latest" {
 		return "latest"
+	}
+
+	if strings.HasPrefix(version, "npm:") {
+		parts := strings.Split(version, "@")
+		if len(parts) >= 2 {
+			version = parts[len(parts)-1]
+		}
+	}
+
+	if strings.Contains(version, "||") {
+		parts := strings.Split(version, "||")
+		version = strings.TrimSpace(parts[0])
 	}
 
 	if strings.Contains(version, " - ") {
-		return "latest"
+		parts := strings.Split(version, " - ")
+		version = strings.TrimSpace(parts[0])
 	}
 
-	prefixes := []string{"^", "~", ">=", "<=", ">", "<", "="}
+	prefixes := []string{"^", "~", ">=", "<=", ">", "<", "=", "v"}
 	for _, prefix := range prefixes {
 		version = strings.TrimPrefix(version, prefix)
 	}
@@ -53,11 +66,31 @@ func stripVersionPrefix(version string) string {
 		return "latest"
 	}
 
-	if len(version) == 1 && (version == "1" || version == "2" || version == "3" || version == "4" || version == "5" || version == "6" || version == "7" || version == "8" || version == "9") {
-		return "latest"
+	parts := strings.Split(version, ".")
+	if len(parts) == 1 && isDigit(parts[0]) {
+		return parts[0] + ".x"
+	}
+
+	if len(parts) == 2 && isDigit(parts[0]) && (parts[1] == "x" || parts[1] == "X" || parts[1] == "*") {
+		return parts[0] + ".x"
+	}
+
+	if strings.Contains(version, "x") || strings.Contains(version, "X") || strings.Contains(version, "*") {
+		version = strings.ReplaceAll(version, "x", "0")
+		version = strings.ReplaceAll(version, "X", "0")
+		version = strings.ReplaceAll(version, "*", "0")
 	}
 
 	return version
+}
+
+func isDigit(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 func getHTTPClient() *http.Client {

@@ -3,7 +3,6 @@ package internal
 import (
 	"archive/tar"
 	"compress/gzip"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -91,6 +90,5 @@ func Install(name, url string) error {
 		}
 	}
 
-	fmt.Println("installed:", name)
 	return nil
 }
