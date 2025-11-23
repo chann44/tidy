@@ -1,5 +1,5 @@
 node_modules
-./package.json
-./tidy
-./go.sum
+package.json
+tidy
+go.sum
 
