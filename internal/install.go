@@ -11,26 +11,6 @@ import (
 	"strings"
 )
 
-func IsInstalled(name string) bool {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return false
-	}
-
-	packageDir := filepath.Join(cwd, "node_modules", name)
-
-	// Check if directory exists and is not empty
-	info, err := os.Stat(packageDir)
-	if err != nil || !info.IsDir() {
-		return false
-	}
-
-	// Check if package.json exists in the package directory
-	packageJson := filepath.Join(packageDir, "package.json")
-	_, err = os.Stat(packageJson)
-	return err == nil
-}
-
 func Install(name, url string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -42,6 +22,7 @@ func Install(name, url string) error {
 
 	packageDir := filepath.Join(nodeModules, name)
 
+	// For scoped packages like @types/node ensure parent exists
 	_ = os.MkdirAll(filepath.Dir(packageDir), 0755)
 	_ = os.MkdirAll(packageDir, 0755)
 
@@ -68,7 +49,10 @@ func Install(name, url string) error {
 			return err
 		}
 
-		rel := strings.TrimPrefix(header.Name, "package/")
+		rel := header.Name
+		if strings.HasPrefix(rel, "package/") {
+			rel = rel[len("package/"):]
+		}
 		if rel == "" {
 			continue
 		}
@@ -96,3 +80,4 @@ func Install(name, url string) error {
 	fmt.Println("installed:", name)
 	return nil
 }
+
