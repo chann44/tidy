@@ -23,6 +23,14 @@ A friendly helper that automatically finds and installs missing npm/bun dependen
 
 A Go tool that automatically finds and installs missing npm/bun dependencies by scanning your TypeScript and JavaScript files.
 
+> 📝 **Journey**: I've shared my journey building this tool on [Twitter/X](https://x.com/44_chann/status/1991221756166557724)
+
+<div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 16px 0; border-radius: 4px;">
+
+⚠️ **Warning**: This is just a utility tool for you. **Should not be used in production.**
+
+</div>
+
 ## What It Does
 
 `tidy` scans your project for TypeScript/JavaScript files, extracts external package imports, and automatically installs any missing packages that aren't already in your `package.json`.
